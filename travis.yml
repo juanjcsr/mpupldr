@@ -1,0 +1,11 @@
+language: go
+
+go:
+  - "1.x"
+  - "1.11"
+
+before_install: 
+  -  go get -v 
+
+script:
+  - go test -v ./cmd
