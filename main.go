@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/juanjcsr/mapuploader/cmd"
+	"github.com/juanjcsr/mpupldr/cmd"
 )
 
 func main() {
