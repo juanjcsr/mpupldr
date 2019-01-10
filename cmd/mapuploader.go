@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -17,6 +20,22 @@ func init() {
 	uploadCmd.PersistentFlags().StringVarP(&mapboxUser, "mapbox-user", "u", "", "Mapbox username")
 	uploadCmd.MarkPersistentFlagRequired("mapbox-user")
 	RootCmd.AddCommand(uploadCmd)
+
+	uploadDir.PersistentFlags().StringVarP(&mapboxToken, "mapbox-token", "m", "", "Mapbox secret access token")
+	uploadDir.MarkPersistentFlagRequired("mapbox-token")
+	uploadDir.PersistentFlags().StringVarP(&mapboxUser, "mapbox-user", "u", "", "Mapbox username")
+	uploadDir.MarkPersistentFlagRequired("mapbox-user")
+	RootCmd.AddCommand(uploadDir)
+}
+
+var uploadDir = &cobra.Command{
+	Use:   "uploadDir [path/to/directory]",
+	Short: "upload geojsons in directory to Mapbox",
+	Long:  "transfors and uploads all geojsons files inside given directory to Mapbox",
+	Run: func(cmd *cobra.Command, args []string) {
+		UploadDir(args[0])
+	},
+	Args: cobra.ExactArgs(1),
 }
 
 var uploadCmd = &cobra.Command{
@@ -29,12 +48,34 @@ var uploadCmd = &cobra.Command{
 	Args: cobra.ExactArgs(2),
 }
 
+func UploadDir(dirname string) {
+	err := os.Chdir(dirname)
+	if err != nil {
+		log.Fatalf("could not open directory: %v", err)
+	}
+
+	files, err := ioutil.ReadDir(".")
+	if err != nil {
+		log.Fatalf("could not read directory: %v", err)
+	}
+
+	for _, f := range files {
+		fn := f.Name()
+		t := time.Now().Format("2006-01-02")
+
+		name := fn[0 : len(fn)-len(filepath.Ext(fn))]
+		fullName := name + "-" + t
+
+		Upload(fn, fullName)
+	}
+}
+
 func Upload(filename, name string) {
 	_, err := checkFile(filename)
 	if err != nil {
 		log.Fatalf("could not find geojson file %s: %v", filename, err)
 	}
-	fn := getNewFileName(filename, "mbtiles")
+	fn := getNewFileName(name, "mbtiles")
 
 	err = execTippeCanoe(fn, filename, []string{"-zg", "--drop-densest-as-needed"})
 	if err != nil {
@@ -61,5 +102,5 @@ func Upload(filename, name string) {
 		time.Sleep(time.Second * 4)
 		d, _ = checkMapboxUpload(res.ID, mapboxUser)
 	}
-	fmt.Printf("COMPLETED %+v", res)
+	fmt.Printf("COMPLETED:\n%s -- %s\n\n", filename, res.Tileset)
 }

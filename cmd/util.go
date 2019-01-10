@@ -45,7 +45,9 @@ func getS3Session(s3t *S3MapboxTokens) (*session.Session, error) {
 }
 
 func execTippeCanoe(file, filename string, args []string) error {
-	cmd := exec.Command("tippecanoe", "-o", file, filename)
+	arg := []string{"-o", file, filename}
+	arg = append(arg, args...)
+	cmd := exec.Command("tippecanoe", arg...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
@@ -88,7 +90,8 @@ func saveToMapbox(filename, bucket, key, username, tilename string) (*MapboxUplo
 	if err != nil {
 		return nil, fmt.Errorf("could not create upload json: %v", err)
 	}
-	fmt.Printf("/nUploading to mapbox: %s /n", url)
+	// fmt.Printf("\nuploading to mapbox: %s \n", url)
+	fmt.Println("uploading to mapbox...")
 	r, err := http.Post(url, "application/json", bytes.NewBuffer(b))
 	bd := r.Body
 	defer bd.Close()
@@ -97,8 +100,8 @@ func saveToMapbox(filename, bucket, key, username, tilename string) (*MapboxUplo
 	if err = json.NewDecoder(bd).Decode(mUR); err != nil {
 		return nil, fmt.Errorf("could not decode data: %v", err)
 	}
-	fmt.Printf("%+v /n", mUR)
-	fmt.Println(mUR)
+	// fmt.Printf("%+v \n", mUR)
+	// fmt.Println(mUR)
 	return mUR, nil
 }
 
@@ -114,7 +117,7 @@ func uploadToS3(filename string, s *session.Session, bucket string, key string) 
 	size := fileinfo.Size()
 	buff := make([]byte, size)
 	file.Read(buff)
-	fmt.Println("uploading to S3...")
+	fmt.Printf("\nuploading to S3...")
 	_, err = s3.New(s).PutObject(&s3.PutObjectInput{
 		Bucket:        aws.String(bucket),
 		Key:           aws.String(key),
@@ -124,6 +127,7 @@ func uploadToS3(filename string, s *session.Session, bucket string, key string) 
 	if err != nil {
 		return fmt.Errorf("could not upload file: %v", err)
 	}
+	fmt.Printf("done\n")
 	return nil
 }
 
@@ -141,7 +145,7 @@ func getS3Tokens(at, user string) *S3MapboxTokens {
 	if err := json.NewDecoder(b).Decode(mt); err != nil {
 		log.Fatalf("could not read s3 tokens: %s", err)
 	}
-	fmt.Printf("%+v", mt)
+	// fmt.Printf("%+v", mt)
 	return mt
 }
 
