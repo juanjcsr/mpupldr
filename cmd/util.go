@@ -46,6 +46,7 @@ func getS3Session(s3t *S3MapboxTokens) (*session.Session, error) {
 
 func execTippeCanoe(file, filename string, args []string) error {
 	arg := []string{"-o", file, filename}
+	fmt.Println(args)
 	arg = append(arg, args...)
 	cmd := exec.Command("tippecanoe", arg...)
 	cmd.Stdout = os.Stdout
@@ -179,3 +180,14 @@ func (mu *MapboxUploadResult) String() string {
 	r, _ := json.Marshal(mu)
 	return string(r)
 }
+
+func createFile(name string) (*os.File, error) {
+	file, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return nil, err
+	}
+	// defer file.Close()
+	return file, nil
+}
+
+// func getCSVWritter

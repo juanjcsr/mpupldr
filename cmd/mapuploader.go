@@ -13,18 +13,21 @@ import (
 
 var mapboxToken string
 var mapboxUser string
+var mapboxargs []string
 
 func init() {
 	uploadCmd.PersistentFlags().StringVarP(&mapboxToken, "mapbox-token", "m", "", "Mapbox secret access token")
 	uploadCmd.MarkPersistentFlagRequired("mapbox-token")
 	uploadCmd.PersistentFlags().StringVarP(&mapboxUser, "mapbox-user", "u", "", "Mapbox username")
 	uploadCmd.MarkPersistentFlagRequired("mapbox-user")
+	uploadCmd.Flags().StringArrayVarP(&mapboxargs, "tippecanoe-args", "p", []string{""}, "Tippecanoe args")
 	RootCmd.AddCommand(uploadCmd)
 
 	uploadDir.PersistentFlags().StringVarP(&mapboxToken, "mapbox-token", "m", "", "Mapbox secret access token")
 	uploadDir.MarkPersistentFlagRequired("mapbox-token")
 	uploadDir.PersistentFlags().StringVarP(&mapboxUser, "mapbox-user", "u", "", "Mapbox username")
 	uploadDir.MarkPersistentFlagRequired("mapbox-user")
+	uploadDir.Flags().StringArrayVarP(&mapboxargs, "tippecanoe-args", "p", []string{""}, "Tippecanoe args")
 	RootCmd.AddCommand(uploadDir)
 }
 
@@ -43,7 +46,10 @@ var uploadCmd = &cobra.Command{
 	Short: "uploads geojson to mapbox",
 	Long:  "stages the current geojson to Mapbox S3 and then to Mapbox",
 	Run: func(cmd *cobra.Command, args []string) {
-		Upload(args[0], args[1])
+		_, err := Upload(args[0], args[1])
+		if err != nil {
+			log.Fatalf("could not process file: %v", err)
+		}
 	},
 	Args: cobra.ExactArgs(2),
 }
@@ -60,42 +66,42 @@ func UploadDir(dirname string) {
 	}
 
 	for _, f := range files {
-		fn := f.Name()
+		filen := f.Name()
 		t := time.Now().Format("2006-01-02")
 
-		name := fn[0 : len(fn)-len(filepath.Ext(fn))]
+		name := filen[0 : len(filen)-len(filepath.Ext(filen))]
 		fullName := name + "-" + t
 
-		Upload(fn, fullName)
+		Upload(filen, fullName)
 	}
 }
 
-func Upload(filename, name string) {
+func Upload(filename, name string) (*MapboxUploadResult, error) {
 	_, err := checkFile(filename)
 	if err != nil {
-		log.Fatalf("could not find geojson file %s: %v", filename, err)
+		return nil, fmt.Errorf("could not find geojson file %s: %v", filename, err)
 	}
 	fn := getNewFileName(name, "mbtiles")
 
-	err = execTippeCanoe(fn, filename, []string{"-zg", "--drop-densest-as-needed"})
+	err = execTippeCanoe(fn, filename, mapboxargs)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, fmt.Errorf("tippecanoe with errors: %v", err)
 	}
 
 	s3t := getS3Tokens(mapboxToken, mapboxUser)
 	session, err := getS3Session(s3t)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
 	err = uploadToS3(fn, session, s3t.Bucket, s3t.Key)
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
 
 	res, err := saveToMapbox(fn, s3t.Bucket, s3t.Key, mapboxUser, name)
 	d, err := checkMapboxUpload(res.ID, mapboxUser)
 	if err != nil {
-		log.Fatalf("could not check mapbox upload data %v", err)
+		return nil, fmt.Errorf("could not check mapbox upload data %v", err)
 	}
 	for d == false {
 		fmt.Printf(".")
@@ -103,4 +109,5 @@ func Upload(filename, name string) {
 		d, _ = checkMapboxUpload(res.ID, mapboxUser)
 	}
 	fmt.Printf("COMPLETED:\n%s -- %s\n\n", filename, res.Tileset)
+	return res, nil
 }
